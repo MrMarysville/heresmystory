@@ -1,0 +1,1506 @@
+# Here's My Story - TODO List
+
+**Last Updated:** 2025-11-12
+**Overall Progress:** ~50% Complete
+
+This document provides a comprehensive breakdown of all remaining MVP features that need to be implemented. Each task includes both frontend and backend requirements for production-ready completion.
+
+---
+
+## 📊 Implementation Status
+
+### ✅ COMPLETED (100%)
+- [x] Authentication System (Supabase Auth + Prisma)
+- [x] Dashboard UI - Recording interface with live transcription
+- [x] Profile Management - Full CRUD operations
+- [x] Recording Controls - Audio capture, pause, resume, stop
+- [x] Conversational AI - Gemini Live integration
+- [x] API Route Protection - Auth verification on all endpoints
+
+### ⚠️ IN PROGRESS (Partial)
+- [ ] Library View - Backend Integration
+- [ ] Keepsake Generators - PDF & Video
+- [ ] UI Components - Consent Dialogs, Avatar Upload
+
+### ❌ NOT STARTED
+- [ ] Import Wizard - Complete feature
+- [ ] Accessibility Features - Full system
+- [ ] Advanced Library Features - Playback, pagination, search
+
+---
+
+## 🎯 Priority 1: Library Backend Integration
+
+**Status:** UI Complete, Backend Missing
+**Estimated Effort:** 4-6 hours
+**Dependencies:** Authentication (✅), Profiles (✅)
+
+### Backend Tasks
+
+#### Task 1.1: Sessions List API Endpoint
+**File:** `app/api/sessions/route.ts` (NEW)
+
+**Requirements:**
+- [ ] Create GET `/api/sessions` endpoint
+- [ ] Verify authentication using `verifyAuth()`
+- [ ] Support query parameters:
+  - `profileId` (optional) - Filter by specific profile
+  - `status` (optional) - Filter by 'ready' or 'processing'
+  - `search` (optional) - Search in title, summary, tags
+  - `limit` (optional, default: 20) - Pagination limit
+  - `offset` (optional, default: 0) - Pagination offset
+- [ ] Query sessions with Prisma:
+  ```typescript
+  const sessions = await prisma.session.findMany({
+    where: {
+      profile: {
+        userId: user.id, // Only user's sessions
+      },
+      ...(profileId && { profileId }),
+      ...(search && {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { summary: { contains: search, mode: 'insensitive' } },
+          { tags: { hasSome: [search] } },
+        ],
+      }),
+    },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          displayName: true,
+          colorTheme: true,
+        },
+      },
+    },
+    orderBy: { startedAt: 'desc' },
+    take: limit,
+    skip: offset,
+  })
+  ```
+- [ ] Return formatted response with session data
+- [ ] Include total count for pagination
+- [ ] Handle errors with proper status codes
+
+**Acceptance Criteria:**
+- Authenticated users can fetch their sessions
+- Search works across title, summary, and tags
+- Pagination works correctly
+- Returns 401 for unauthenticated requests
+- Returns only sessions belonging to user's profiles
+
+#### Task 1.2: Single Session Detail API
+**File:** `app/api/sessions/[id]/route.ts` (NEW)
+
+**Requirements:**
+- [ ] Create GET `/api/sessions/:id` endpoint
+- [ ] Verify authentication
+- [ ] Verify session belongs to user's profile
+- [ ] Return full session details:
+  ```typescript
+  const session = await prisma.session.findFirst({
+    where: {
+      id: sessionId,
+      profile: {
+        userId: user.id,
+      },
+    },
+    include: {
+      profile: true,
+      assets: true,
+    },
+  })
+  ```
+- [ ] Return 404 if session not found or doesn't belong to user
+- [ ] Include audio URLs, transcript, summary, tags, entities
+
+**Acceptance Criteria:**
+- Users can fetch detailed session information
+- Includes all related assets
+- Proper authorization checks
+- 404 for invalid or unauthorized sessions
+
+### Frontend Tasks
+
+#### Task 1.3: Connect Library Page to Real Data
+**File:** `app/library/page.tsx`
+
+**Requirements:**
+- [ ] Remove mock data
+- [ ] Add state management for sessions:
+  ```typescript
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  ```
+- [ ] Create `loadSessions()` function:
+  ```typescript
+  const loadSessions = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({
+        status: filterStatus === 'all' ? '' : filterStatus,
+        search: searchQuery,
+        limit: '20',
+        offset: (page * 20).toString(),
+      })
+      const response = await fetch(`/api/sessions?${params}`)
+      if (!response.ok) throw new Error('Failed to load sessions')
+      const data = await response.json()
+      setSessions(data.sessions)
+      setTotalCount(data.total)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  ```
+- [ ] Call `loadSessions()` on mount and when filters change
+- [ ] Update session cards to use real data fields
+- [ ] Handle loading state with spinner
+- [ ] Handle error state with retry button
+- [ ] Handle empty state when no sessions found
+
+**Acceptance Criteria:**
+- Library loads real sessions from database
+- Search works in real-time
+- Filters update results
+- Loading states display correctly
+- Errors are handled gracefully
+
+#### Task 1.4: Audio Playback Controls
+**File:** `components/audio/AudioPlayer.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create AudioPlayer component with:
+  - Play/pause button
+  - Progress bar (seekable)
+  - Current time / total duration display
+  - Playback speed controls (0.5x, 1x, 1.5x, 2x)
+  - Volume control
+  - Download button
+- [ ] Use Web Audio API or HTML5 audio element
+- [ ] Accept props:
+  ```typescript
+  interface AudioPlayerProps {
+    audioUrl: string
+    title?: string
+    onEnded?: () => void
+  }
+  ```
+- [ ] Implement keyboard controls:
+  - Space: Play/pause
+  - Arrow left/right: Skip 10s
+  - Arrow up/down: Volume
+- [ ] Save playback position to localStorage
+- [ ] Resume from last position on reload
+- [ ] Show loading spinner while audio loads
+- [ ] Handle audio load errors
+
+**Acceptance Criteria:**
+- Audio plays correctly from URL
+- All controls work smoothly
+- Keyboard shortcuts function
+- Playback position persists
+- Errors display user-friendly messages
+
+#### Task 1.5: Integrate AudioPlayer in Library
+**File:** `app/library/page.tsx`
+
+**Requirements:**
+- [ ] Import AudioPlayer component
+- [ ] Add "Listen" button click handler:
+  ```typescript
+  const [playingSession, setPlayingSession] = useState<Session | null>(null)
+
+  const handleListen = (session: Session) => {
+    setPlayingSession(session)
+  }
+  ```
+- [ ] Render AudioPlayer when session selected:
+  ```typescript
+  {playingSession && (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg p-4 z-50">
+      <AudioPlayer
+        audioUrl={playingSession.cleanAudioUrl || playingSession.rawAudioUrl}
+        title={playingSession.title}
+        onEnded={() => setPlayingSession(null)}
+      />
+    </div>
+  )}
+  ```
+- [ ] Disable "Listen" button when audio URL not available
+- [ ] Show "Processing" status for sessions without clean audio
+
+**Acceptance Criteria:**
+- Listen button opens audio player
+- Player appears at bottom of screen
+- Audio plays from session URL
+- Player persists while browsing library
+- Can close player
+
+#### Task 1.6: Transcript Viewer Modal
+**File:** `components/library/TranscriptModal.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create modal component using Dialog from `components/ui/Dialog.tsx`
+- [ ] Accept props:
+  ```typescript
+  interface TranscriptModalProps {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    session: Session
+  }
+  ```
+- [ ] Display formatted transcript with:
+  - Speaker labels (if diarization available)
+  - Timestamps for each segment
+  - Scrollable view
+  - Search within transcript
+  - Copy to clipboard button
+  - Download as text button
+- [ ] Parse `transcriptJson` from session:
+  ```typescript
+  const transcript = JSON.parse(session.transcriptJson)
+  // Expected format: { segments: [{ text, start, end, speaker }] }
+  ```
+- [ ] Highlight search matches
+- [ ] Auto-scroll to timestamp if provided
+
+**Acceptance Criteria:**
+- Transcript displays in readable format
+- Speaker labels shown if available
+- Timestamps formatted (MM:SS)
+- Search highlights matches
+- Copy and download work
+
+#### Task 1.7: Pagination Controls
+**File:** `app/library/page.tsx`
+
+**Requirements:**
+- [ ] Add pagination UI at bottom of library:
+  ```typescript
+  <div className="flex items-center justify-between mt-8">
+    <p className="text-sm text-gray-600">
+      Showing {offset + 1} to {Math.min(offset + limit, totalCount)} of {totalCount} stories
+    </p>
+    <div className="flex gap-2">
+      <button
+        onClick={() => setPage(page - 1)}
+        disabled={page === 0}
+        className="px-4 py-2 border rounded disabled:opacity-50"
+      >
+        Previous
+      </button>
+      <span className="px-4 py-2">
+        Page {page + 1} of {Math.ceil(totalCount / limit)}
+      </span>
+      <button
+        onClick={() => setPage(page + 1)}
+        disabled={(page + 1) * limit >= totalCount}
+        className="px-4 py-2 border rounded disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  </div>
+  ```
+- [ ] Update `loadSessions()` when page changes
+- [ ] Scroll to top when page changes
+- [ ] Show page number in URL (optional)
+
+**Acceptance Criteria:**
+- Pagination buttons work correctly
+- Shows current page and total pages
+- Previous/Next disabled appropriately
+- Page changes trigger data reload
+
+---
+
+## 🎯 Priority 2: Import Wizard (Complete New Feature)
+
+**Status:** Not Started
+**Estimated Effort:** 8-10 hours
+**Dependencies:** Authentication (✅), Profiles (✅), Storage setup
+
+### Backend Tasks
+
+#### Task 2.1: File Upload API Endpoint
+**File:** `app/api/import/upload/route.ts` (NEW)
+
+**Requirements:**
+- [ ] Install file upload library: `npm install formidable`
+- [ ] Create POST `/api/import/upload` endpoint
+- [ ] Verify authentication
+- [ ] Accept multipart/form-data with audio files
+- [ ] Validate file types (MP3, WAV, M4A, OGG)
+- [ ] Validate file size (max 500MB per file)
+- [ ] Generate unique file names
+- [ ] Upload to storage (Supabase Storage or Google Cloud Storage):
+  ```typescript
+  const { data, error } = await supabase.storage
+    .from('audio-imports')
+    .upload(`${userId}/${Date.now()}_${filename}`, file)
+  ```
+- [ ] Create ImportJob record in database:
+  ```typescript
+  const importJob = await prisma.importJob.create({
+    data: {
+      userId: user.id,
+      profileId,
+      status: 'PENDING',
+      files: {
+        create: files.map(file => ({
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type,
+          url: file.url,
+          status: 'UPLOADED',
+        })),
+      },
+    },
+  })
+  ```
+- [ ] Return import job ID and upload confirmation
+- [ ] Handle upload errors gracefully
+- [ ] Support batch uploads (multiple files)
+
+**Acceptance Criteria:**
+- Files upload successfully to storage
+- Import jobs created in database
+- Supports multiple file formats
+- Rejects invalid file types
+- Returns proper error messages
+
+#### Task 2.2: Import Processing Job Handler
+**File:** `lib/jobs/handlers/importHandler.ts` (NEW)
+
+**Requirements:**
+- [ ] Create async import processor function
+- [ ] Process audio files:
+  1. Download from storage
+  2. Run FFmpeg cleanup pipeline
+  3. Generate waveform visualization
+  4. Extract metadata (duration, bit rate, sample rate)
+  5. Run speech-to-text transcription
+  6. Create session record with transcript
+  7. Update import job status
+- [ ] Use FFmpeg for audio processing:
+  ```typescript
+  import ffmpeg from 'fluent-ffmpeg'
+
+  const processAudio = (inputPath, outputPath) => {
+    return new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .audioCodec('libmp3lame')
+        .audioChannels(1) // Mono
+        .audioFrequency(16000) // 16kHz
+        .audioFilters(['loudnorm=I=-16:TP=-1.5:LRA=11'])
+        .on('end', resolve)
+        .on('error', reject)
+        .save(outputPath)
+    })
+  }
+  ```
+- [ ] Call Google Speech-to-Text API for transcription
+- [ ] Update job progress incrementally (0%, 25%, 50%, 75%, 100%)
+- [ ] Handle errors and mark job as failed
+- [ ] Send notification on completion
+
+**Acceptance Criteria:**
+- Audio files processed correctly
+- Clean audio generated
+- Transcription accurate
+- Progress updates work
+- Errors handled gracefully
+
+#### Task 2.3: Import Status API
+**File:** `app/api/import/[jobId]/route.ts` (NEW)
+
+**Requirements:**
+- [ ] Create GET `/api/import/:jobId` endpoint
+- [ ] Verify authentication
+- [ ] Verify job belongs to user
+- [ ] Return import job status:
+  ```typescript
+  const job = await prisma.importJob.findFirst({
+    where: {
+      id: jobId,
+      userId: user.id,
+    },
+    include: {
+      files: true,
+    },
+  })
+  ```
+- [ ] Return progress percentage
+- [ ] Return error messages if failed
+- [ ] Return created session IDs if completed
+
+**Acceptance Criteria:**
+- Status endpoint returns job data
+- Progress percentage accurate
+- Authorization checks pass
+- 404 for invalid jobs
+
+### Frontend Tasks
+
+#### Task 2.4: Import Wizard Page
+**File:** `app/import/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create import wizard page with steps:
+  1. Select profile
+  2. Upload files
+  3. Processing
+  4. Complete
+- [ ] Use step indicator UI component
+- [ ] Add authentication check
+- [ ] Create multi-step form state machine:
+  ```typescript
+  type Step = 'select-profile' | 'upload' | 'processing' | 'complete'
+  const [currentStep, setCurrentStep] = useState<Step>('select-profile')
+  const [selectedProfile, setSelectedProfile] = useState<string | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+  const [jobId, setJobId] = useState<string | null>(null)
+  ```
+- [ ] Navigate between steps with validation
+- [ ] Show progress indicator for current step
+
+**Acceptance Criteria:**
+- Wizard steps display correctly
+- Can navigate between steps
+- State persists across steps
+- UI matches app design
+
+#### Task 2.5: File Drop Zone Component
+**File:** `components/import/FileDropZone.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create drag-and-drop file upload component
+- [ ] Use native File API and drag events
+- [ ] Visual feedback:
+  - Highlight drop zone on drag over
+  - Show file count and total size
+  - Display file list with remove option
+  - Show upload progress per file
+- [ ] Accept props:
+  ```typescript
+  interface FileDropZoneProps {
+    onFilesSelected: (files: File[]) => void
+    maxFiles?: number
+    maxSizePerFile?: number // bytes
+    acceptedTypes?: string[] // ['audio/mpeg', 'audio/wav', etc.]
+  }
+  ```
+- [ ] Implement drag-and-drop handlers:
+  ```typescript
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const files = Array.from(e.dataTransfer.files)
+    const validFiles = files.filter(file =>
+      acceptedTypes.includes(file.type) &&
+      file.size <= maxSizePerFile
+    )
+    onFilesSelected(validFiles)
+  }
+  ```
+- [ ] Add file input fallback (click to browse)
+- [ ] Validate file types and sizes
+- [ ] Show error for invalid files
+- [ ] Display file previews (name, size, duration if possible)
+
+**Acceptance Criteria:**
+- Drag-and-drop works smoothly
+- Click to browse works
+- File validation prevents invalid uploads
+- Shows clear feedback
+- Multiple files supported
+
+#### Task 2.6: Import Processing View
+**File:** `components/import/ProcessingView.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create processing status component
+- [ ] Poll import status API every 2 seconds:
+  ```typescript
+  useEffect(() => {
+    if (!jobId) return
+
+    const interval = setInterval(async () => {
+      const response = await fetch(`/api/import/${jobId}`)
+      const data = await response.json()
+
+      setProgress(data.progress)
+      setStatus(data.status)
+
+      if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+        clearInterval(interval)
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [jobId])
+  ```
+- [ ] Display progress bar with percentage
+- [ ] Show current step (uploading, cleaning, transcribing, etc.)
+- [ ] Show file-by-file progress if batch import
+- [ ] Display completion message with session links
+- [ ] Handle errors with retry option
+- [ ] Show cancel button (optional)
+
+**Acceptance Criteria:**
+- Progress updates in real-time
+- Shows which file is being processed
+- Completes when all files done
+- Error handling with retry
+- Links to created sessions
+
+#### Task 2.7: Cassette Digitization Mode (Optional Enhancement)
+**File:** `app/import/cassette/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create special mode for cassette tape digitization
+- [ ] Features:
+  - Auto-detect silence for track splitting
+  - Noise reduction presets
+  - Tape hiss removal
+  - Speed correction (for worn tapes)
+  - Side A / Side B labeling
+- [ ] Use enhanced FFmpeg filters:
+  ```typescript
+  .audioFilters([
+    'highpass=f=100', // Remove low rumble
+    'afftdn=nf=-25', // Noise reduction
+    'loudnorm=I=-16:TP=-1.5:LRA=11', // Normalize
+  ])
+  ```
+- [ ] Split by silence detection:
+  ```typescript
+  .audioFilters([
+    'silencedetect=noise=-30dB:d=2'
+  ])
+  ```
+- [ ] UI for adjusting noise reduction strength
+- [ ] Preview before/after audio
+
+**Acceptance Criteria:**
+- Cassette mode improves old recordings
+- Silence splitting works accurately
+- Noise reduction effective
+- Preview shows improvements
+
+---
+
+## 🎯 Priority 3: Accessibility Features
+
+**Status:** Not Started
+**Estimated Effort:** 4-6 hours
+**Dependencies:** None (standalone feature)
+
+### Backend Tasks
+
+#### Task 3.1: User Settings API
+**File:** `app/api/settings/route.ts` (NEW)
+
+**Requirements:**
+- [ ] Add accessibility settings to User model in Prisma:
+  ```prisma
+  model User {
+    // ... existing fields
+    accessibilitySettings Json? @default("{\"textSize\":\"medium\",\"highContrast\":false,\"slowMode\":false,\"reducedMotion\":false,\"speechRate\":1.0}")
+  }
+  ```
+- [ ] Run migration: `npx prisma migrate dev --name add-accessibility-settings`
+- [ ] Create GET `/api/settings` endpoint:
+  - Verify authentication
+  - Return user's accessibility settings
+- [ ] Create PATCH `/api/settings` endpoint:
+  - Verify authentication
+  - Update settings in database
+  - Validate settings values
+  ```typescript
+  const validatedSettings = {
+    textSize: ['small', 'medium', 'large', 'extra-large'].includes(body.textSize)
+      ? body.textSize
+      : 'medium',
+    highContrast: Boolean(body.highContrast),
+    slowMode: Boolean(body.slowMode),
+    reducedMotion: Boolean(body.reducedMotion),
+    speechRate: Math.max(0.5, Math.min(2.0, Number(body.speechRate) || 1.0)),
+  }
+  ```
+
+**Acceptance Criteria:**
+- Settings saved to database
+- Validation prevents invalid values
+- Returns current settings
+- Authorization checks pass
+
+### Frontend Tasks
+
+#### Task 3.2: Accessibility Settings Page
+**File:** `app/settings/accessibility/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create settings page with sections:
+  1. Text Size
+  2. Visual Preferences
+  3. Motion & Animation
+  4. Audio Settings
+- [ ] Load settings on mount:
+  ```typescript
+  const [settings, setSettings] = useState<AccessibilitySettings>()
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  const loadSettings = async () => {
+    const response = await fetch('/api/settings')
+    const data = await response.json()
+    setSettings(data.accessibilitySettings)
+    setIsLoading(false)
+  }
+  ```
+- [ ] Create form controls for each setting
+- [ ] Save settings on change:
+  ```typescript
+  const updateSetting = async (key: string, value: any) => {
+    const newSettings = { ...settings, [key]: value }
+    setSettings(newSettings)
+
+    await fetch('/api/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accessibilitySettings: newSettings }),
+    })
+
+    applySettings(newSettings)
+  }
+  ```
+- [ ] Show preview of each setting
+- [ ] Add reset to defaults button
+
+**Acceptance Criteria:**
+- All settings display correctly
+- Changes save immediately
+- Preview shows effect
+- Works with keyboard navigation
+
+#### Task 3.3: Text Size Control
+**File:** `components/accessibility/TextSizeControl.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create text size toggle component
+- [ ] Options: Small, Medium, Large, Extra Large
+- [ ] Apply via CSS custom properties:
+  ```typescript
+  const applyTextSize = (size: string) => {
+    const root = document.documentElement
+    const sizes = {
+      small: '14px',
+      medium: '16px',
+      large: '18px',
+      'extra-large': '20px',
+    }
+    root.style.setProperty('--base-font-size', sizes[size])
+  }
+  ```
+- [ ] Update base font size in CSS:
+  ```css
+  html {
+    font-size: var(--base-font-size, 16px);
+  }
+  ```
+- [ ] Show preview text at each size
+- [ ] Visual buttons with size indicators
+
+**Acceptance Criteria:**
+- Text size changes app-wide
+- Preview accurate
+- Persists across sessions
+- Smooth transitions
+
+#### Task 3.4: High Contrast Mode
+**File:** `lib/hooks/useHighContrast.ts` (NEW)
+
+**Requirements:**
+- [ ] Create hook to manage high contrast theme
+- [ ] Define high contrast color palette:
+  ```typescript
+  const highContrastColors = {
+    background: '#000000',
+    surface: '#1a1a1a',
+    primary: '#ffffff',
+    secondary: '#ffff00',
+    text: '#ffffff',
+    textSecondary: '#cccccc',
+    border: '#ffffff',
+    error: '#ff0000',
+    success: '#00ff00',
+  }
+  ```
+- [ ] Apply via CSS classes or custom properties
+- [ ] Toggle on/off with smooth transition
+- [ ] Maintain WCAG AAA contrast ratios (7:1 minimum)
+- [ ] Update all components to respect theme
+
+**Acceptance Criteria:**
+- High contrast mode has strong colors
+- Meets WCAG AAA standards
+- All text readable
+- Images have sufficient contrast
+
+#### Task 3.5: Slow Mode (Reduced Speed)
+**File:** `lib/hooks/useSlowMode.ts` (NEW)
+
+**Requirements:**
+- [ ] Create hook to manage animation speeds
+- [ ] When enabled:
+  - Increase transition durations by 2x
+  - Add pauses between UI changes
+  - Slow down auto-advancing carousels
+  - Add "Continue" buttons instead of auto-advance
+- [ ] Apply globally via CSS:
+  ```typescript
+  const applySlowMode = (enabled: boolean) => {
+    const root = document.documentElement
+    if (enabled) {
+      root.style.setProperty('--transition-speed', '0.6s')
+      root.classList.add('slow-mode')
+    } else {
+      root.style.setProperty('--transition-speed', '0.3s')
+      root.classList.remove('slow-mode')
+    }
+  }
+  ```
+- [ ] Update CSS transitions to use variable
+- [ ] Add manual controls for auto-advancing elements
+
+**Acceptance Criteria:**
+- Animations noticeably slower
+- UI feels less rushed
+- Manual controls available
+- Smooth experience
+
+#### Task 3.6: Reduced Motion
+**File:** `lib/hooks/useReducedMotion.ts` (NEW)
+
+**Requirements:**
+- [ ] Respect user's OS preference: `prefers-reduced-motion`
+- [ ] Allow manual override in settings
+- [ ] When enabled:
+  - Disable all non-essential animations
+  - Replace animations with instant transitions
+  - Remove parallax effects
+  - Disable auto-play videos
+- [ ] Use CSS media query:
+  ```css
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  ```
+- [ ] Add `reduced-motion` class to body when enabled
+
+**Acceptance Criteria:**
+- Respects OS setting
+- Can override in app
+- No jarring animations
+- Essential feedback remains
+
+#### Task 3.7: Speech Rate Control
+**File:** `components/accessibility/SpeechRateControl.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create slider for speech rate (0.5x to 2.0x)
+- [ ] Apply to all audio playback:
+  ```typescript
+  const audioElement = useRef<HTMLAudioElement>(null)
+
+  useEffect(() => {
+    if (audioElement.current) {
+      audioElement.current.playbackRate = speechRate
+    }
+  }, [speechRate])
+  ```
+- [ ] Apply to TTS voice playback
+- [ ] Show current rate (e.g., "1.25x")
+- [ ] Include presets: Slow (0.75x), Normal (1.0x), Fast (1.25x)
+- [ ] Save preference
+
+**Acceptance Criteria:**
+- Audio plays at selected speed
+- Quality remains good
+- Slider smooth and responsive
+- Preference persists
+
+#### Task 3.8: Accessibility Settings Context
+**File:** `lib/context/AccessibilityContext.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create React Context for accessibility settings
+- [ ] Load settings from API on app start
+- [ ] Apply settings globally
+- [ ] Provide update functions
+- [ ] Persist to localStorage for instant load
+- [ ] Sync with database on changes
+- [ ] Example:
+  ```typescript
+  export const AccessibilityProvider = ({ children }) => {
+    const [settings, setSettings] = useState<AccessibilitySettings>()
+
+    useEffect(() => {
+      // Load from localStorage first
+      const cached = localStorage.getItem('accessibility')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        setSettings(parsed)
+        applySettings(parsed)
+      }
+
+      // Then fetch from API
+      fetchSettings()
+    }, [])
+
+    const updateSettings = async (newSettings) => {
+      setSettings(newSettings)
+      localStorage.setItem('accessibility', JSON.stringify(newSettings))
+      await saveToAPI(newSettings)
+      applySettings(newSettings)
+    }
+
+    return (
+      <AccessibilityContext.Provider value={{ settings, updateSettings }}>
+        {children}
+      </AccessibilityContext.Provider>
+    )
+  }
+  ```
+- [ ] Wrap app in provider in `app/layout.tsx`
+
+**Acceptance Criteria:**
+- Settings available app-wide
+- Loads instantly from localStorage
+- Syncs with database
+- All components can access
+
+---
+
+## 🎯 Priority 4: Consent Dialog UI
+
+**Status:** Backend Complete, Frontend Missing
+**Estimated Effort:** 3-4 hours
+**Dependencies:** Dialog component (✅)
+
+### Frontend Tasks
+
+#### Task 4.1: Consent Dialog Component
+**File:** `components/consent/ConsentDialog.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create multi-step consent dialog using Dialog component
+- [ ] Steps:
+  1. Introduction - Explain voice training
+  2. Terms - Display consent text from API
+  3. Review - Summarize what user is agreeing to
+  4. Sign - Checkbox "I agree" + Submit
+- [ ] Fetch consent text from API:
+  ```typescript
+  const { data } = await fetch(`/api/voice/consent?profileId=${profileId}`)
+  const consentText = data.consentText
+  ```
+- [ ] Accept props:
+  ```typescript
+  interface ConsentDialogProps {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    profileId: string
+    onConsent: () => void
+  }
+  ```
+- [ ] Submit consent:
+  ```typescript
+  const handleAgree = async () => {
+    await fetch('/api/voice/consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profileId,
+        agreed: true,
+      }),
+    })
+    onConsent()
+  }
+  ```
+- [ ] Show error if submission fails
+- [ ] Prevent closing without completing
+
+**Acceptance Criteria:**
+- Consent flow is clear
+- User must check "I agree"
+- Submits to API successfully
+- Cannot skip steps
+- Terms displayed clearly
+
+#### Task 4.2: Consent Status Banner
+**File:** `components/consent/ConsentBanner.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create banner component for profiles without consent
+- [ ] Display on profile page and dashboard
+- [ ] Check consent status:
+  ```typescript
+  const { data } = await fetch(`/api/voice/consent?profileId=${profileId}`)
+  const hasConsent = data.hasConsent
+  ```
+- [ ] Show banner if no consent:
+  ```jsx
+  {!hasConsent && (
+    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+      <div className="flex">
+        <div className="ml-3">
+          <p className="text-sm text-yellow-700">
+            Voice training requires consent.
+            <button onClick={() => setConsentDialogOpen(true)} className="font-medium underline">
+              Provide consent now
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  )}
+  ```
+- [ ] Hide after consent granted
+- [ ] Show expiration warning if consent expires soon
+
+**Acceptance Criteria:**
+- Banner shows when needed
+- Hides after consent
+- Opens consent dialog
+- Warning for expiring consent
+
+#### Task 4.3: Consent Management Page
+**File:** `app/settings/consent/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create page to view and manage all consents
+- [ ] List all profiles with consent status
+- [ ] Show consent details:
+  - Type (Voice Training, Family Sharing, etc.)
+  - Signed date
+  - Version
+  - Status (Active, Revoked, Expired)
+- [ ] Add "Revoke Consent" button:
+  ```typescript
+  const revokeConsent = async (profileId: string) => {
+    await fetch(`/api/voice/consent?profileId=${profileId}`, {
+      method: 'DELETE',
+    })
+    reloadConsents()
+  }
+  ```
+- [ ] Show confirmation before revoking
+- [ ] Explain consequences of revocation
+- [ ] Allow re-granting consent
+
+**Acceptance Criteria:**
+- All consents listed
+- Can revoke consent
+- Confirmation required
+- Clear consequences explained
+
+---
+
+## 🎯 Priority 5: Keepsake Generators (PDF & Video)
+
+**Status:** Placeholder Only
+**Estimated Effort:** 8-12 hours
+**Dependencies:** Library (partial), Sessions data
+
+### Backend Tasks
+
+#### Task 5.1: PDF Album Generator
+**File:** `lib/jobs/handlers/albumHandler.ts`
+
+**Requirements:**
+- [ ] Replace placeholder implementation with real PDF generation
+- [ ] Use jsPDF library (already installed)
+- [ ] Fetch session data for album:
+  ```typescript
+  const sessions = await prisma.session.findMany({
+    where: {
+      profileId,
+      id: { in: sessionIds },
+    },
+    include: {
+      profile: true,
+    },
+    orderBy: { startedAt: 'asc' },
+  })
+  ```
+- [ ] Generate PDF with:
+  - Cover page with profile photo/name
+  - Table of contents
+  - One page per story with:
+    - Title
+    - Date recorded
+    - Formatted transcript
+    - Optional: Generated illustration
+  - Back cover with family message
+- [ ] Example implementation:
+  ```typescript
+  import jsPDF from 'jspdf'
+
+  const generateAlbum = async (sessions: Session[]) => {
+    const doc = new jsPDF()
+
+    // Cover page
+    doc.setFontSize(24)
+    doc.text(`${sessions[0].profile.displayName}'s Stories`, 20, 20)
+
+    // Stories
+    sessions.forEach((session, index) => {
+      if (index > 0) doc.addPage()
+
+      doc.setFontSize(18)
+      doc.text(session.title, 20, 20)
+
+      doc.setFontSize(10)
+      doc.text(`Recorded: ${formatDate(session.startedAt)}`, 20, 30)
+
+      doc.setFontSize(12)
+      const transcript = session.summary || session.transcriptJson
+      doc.text(transcript, 20, 40, { maxWidth: 170 })
+    })
+
+    return doc.output('arraybuffer')
+  }
+  ```
+- [ ] Upload PDF to storage
+- [ ] Create Asset record in database
+- [ ] Return asset URL
+
+**Acceptance Criteria:**
+- PDF generates successfully
+- Contains all selected stories
+- Readable formatting
+- Uploaded to storage
+- Downloadable link returned
+
+#### Task 5.2: Video Generator (Basic)
+**File:** `lib/jobs/handlers/videoHandler.ts`
+
+**Requirements:**
+- [ ] Replace placeholder with FFmpeg video generation
+- [ ] Use fluent-ffmpeg (already installed)
+- [ ] Create video with:
+  - Background music (optional)
+  - Profile photo overlay
+  - Scrolling transcript text
+  - Audio narration (story audio or TTS)
+- [ ] Example implementation:
+  ```typescript
+  import ffmpeg from 'fluent-ffmpeg'
+
+  const generateVideo = async (session: Session) => {
+    const outputPath = `/tmp/video_${session.id}.mp4`
+
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(session.cleanAudioUrl) // Audio track
+        .input('background.jpg') // Static image
+        .inputOptions(['-loop 1']) // Loop image
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .size('1920x1080')
+        .duration(session.duration)
+        .on('end', resolve)
+        .on('error', reject)
+        .save(outputPath)
+    })
+
+    return outputPath
+  }
+  ```
+- [ ] Add subtitles from transcript (optional)
+- [ ] Upload video to storage
+- [ ] Create Asset record
+- [ ] Return video URL
+
+**Acceptance Criteria:**
+- Video generates successfully
+- Audio synced correctly
+- Reasonable file size
+- Uploaded to storage
+- Playable in browser
+
+#### Task 5.3: Image Generation (AI Illustrations)
+**File:** `lib/ai/image-generation.ts` (NEW)
+
+**Requirements:**
+- [ ] Integrate AI image generation API (OpenAI DALL-E or Google Imagen)
+- [ ] Generate illustration based on story summary
+- [ ] Create prompt from session data:
+  ```typescript
+  const generatePrompt = (session: Session) => {
+    return `A warm, family-friendly illustration depicting: ${session.summary}.
+            Style: watercolor, nostalgic, heartwarming.
+            Mood: sentimental and joyful.`
+  }
+  ```
+- [ ] Call image generation API:
+  ```typescript
+  // OpenAI DALL-E example
+  import OpenAI from 'openai'
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+  const generateImage = async (prompt: string) => {
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+    })
+
+    return response.data[0].url
+  }
+  ```
+- [ ] Download and store generated image
+- [ ] Create Asset record
+- [ ] Return image URL
+- [ ] Handle API rate limits and errors
+
+**Acceptance Criteria:**
+- Images generated successfully
+- Relevant to story content
+- Family-appropriate
+- Stored properly
+- Error handling for API failures
+
+### Frontend Tasks
+
+#### Task 5.4: Keepsake Creation Page
+**File:** `app/keepsakes/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create page for generating keepsakes
+- [ ] Keepsake types:
+  - PDF Photo Album
+  - Narrated Video
+  - Image Collection
+- [ ] UI workflow:
+  1. Select keepsake type
+  2. Choose profile
+  3. Select stories to include
+  4. Customize options (template, style, music)
+  5. Generate
+  6. Download/share
+- [ ] Session selection with checkboxes:
+  ```typescript
+  const [selectedSessions, setSelectedSessions] = useState<string[]>([])
+
+  const toggleSession = (sessionId: string) => {
+    setSelectedSessions(prev =>
+      prev.includes(sessionId)
+        ? prev.filter(id => id !== sessionId)
+        : [...prev, sessionId]
+    )
+  }
+  ```
+- [ ] Submit generation request:
+  ```typescript
+  const generateKeepsake = async () => {
+    const response = await fetch('/api/keepsakes/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'PDF_ALBUM', // or 'VIDEO'
+        profileId,
+        sessionIds: selectedSessions,
+        options: {
+          template: selectedTemplate,
+          includeImages: true,
+        },
+      }),
+    })
+
+    const { jobId } = await response.json()
+    setGeneratingJobId(jobId)
+  }
+  ```
+- [ ] Show generation progress with polling
+- [ ] Display download link when complete
+
+**Acceptance Criteria:**
+- Type selection clear
+- Story selection intuitive
+- Options easy to configure
+- Progress visible
+- Download works
+
+#### Task 5.5: Template Selection Component
+**File:** `components/keepsakes/TemplateSelector.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create component for selecting PDF/video templates
+- [ ] Templates:
+  - Classic (simple, clean)
+  - Modern (bold colors, photos)
+  - Vintage (aged paper, serif fonts)
+  - Children's Book (playful, illustrations)
+- [ ] Show template previews
+- [ ] Visual selection with radio buttons or cards
+- [ ] Return selected template ID
+
+**Acceptance Criteria:**
+- Templates display with previews
+- Easy to select
+- Shows what final output looks like
+
+#### Task 5.6: Keepsake Gallery
+**File:** `app/keepsakes/gallery/page.tsx` (NEW)
+
+**Requirements:**
+- [ ] Create page showing all generated keepsakes
+- [ ] Fetch keepsakes from API:
+  ```typescript
+  const keepsakes = await fetch('/api/keepsakes')
+  ```
+- [ ] Display as grid with:
+  - Thumbnail preview
+  - Title
+  - Creation date
+  - Type (PDF/Video/Images)
+  - File size
+  - Download button
+  - Share button
+  - Delete button
+- [ ] Filter by type and profile
+- [ ] Sort by date (newest first)
+
+**Acceptance Criteria:**
+- All keepsakes listed
+- Can download any keepsake
+- Filters work
+- Delete removes from storage
+
+---
+
+## 🔧 Additional Tasks
+
+### Infrastructure
+
+#### Task 6.1: Error Logging System
+**File:** `lib/monitoring/error-logger.ts` (NEW)
+
+**Requirements:**
+- [ ] Set up error logging service (Sentry, LogRocket, or custom)
+- [ ] Capture frontend errors
+- [ ] Capture API errors
+- [ ] Include context (user ID, session, action)
+- [ ] Send to monitoring service
+- [ ] Create error boundary components
+
+#### Task 6.2: Analytics Integration
+**File:** `lib/analytics/tracker.ts` (NEW)
+
+**Requirements:**
+- [ ] Integrate analytics (Plausible, Fathom, or GA4)
+- [ ] Track key events:
+  - User signup
+  - Profile created
+  - Recording started/completed
+  - Story listened
+  - Keepsake generated
+- [ ] Privacy-friendly (no PII)
+- [ ] GDPR compliant
+
+#### Task 6.3: Performance Optimization
+**File:** Various
+
+**Requirements:**
+- [ ] Add loading skeletons to all pages
+- [ ] Implement image lazy loading
+- [ ] Code split large components
+- [ ] Add service worker for offline support
+- [ ] Optimize bundle size
+- [ ] Add caching strategies
+
+### Testing
+
+#### Task 7.1: Unit Tests
+**Requirements:**
+- [ ] Set up Vitest or Jest
+- [ ] Test auth utilities
+- [ ] Test API helpers
+- [ ] Test hooks
+- [ ] Aim for 70%+ coverage
+
+#### Task 7.2: Integration Tests
+**Requirements:**
+- [ ] Set up Playwright or Cypress
+- [ ] Test complete user flows:
+  - Sign up → Create profile → Record story → Listen
+  - Import audio → Process → View in library
+  - Generate keepsake → Download
+- [ ] Test on multiple browsers
+
+#### Task 7.3: E2E Tests
+**Requirements:**
+- [ ] Test full production environment
+- [ ] Test payment flow (if added)
+- [ ] Test email delivery
+- [ ] Test file uploads at scale
+
+---
+
+## 📝 Notes for LLM Implementers
+
+### General Guidelines
+
+1. **Always read existing code first**
+   - Check for similar patterns in the codebase
+   - Reuse existing components and utilities
+   - Follow established naming conventions
+
+2. **Test as you build**
+   - Test each function individually
+   - Test edge cases
+   - Test error scenarios
+
+3. **Handle errors gracefully**
+   - Display user-friendly error messages
+   - Log errors for debugging
+   - Provide recovery options
+
+4. **Maintain consistency**
+   - Use existing UI patterns
+   - Follow TypeScript types
+   - Match design system
+
+5. **Consider accessibility**
+   - Add ARIA labels
+   - Ensure keyboard navigation
+   - Test with screen readers
+
+6. **Performance matters**
+   - Optimize queries
+   - Lazy load components
+   - Minimize re-renders
+
+### File Structure
+
+```
+app/
+  ├── api/              # API routes
+  ├── (auth)/           # Auth pages (login, signup)
+  ├── dashboard/        # Recording interface
+  ├── library/          # Story library
+  ├── profiles/         # Profile management
+  ├── import/           # Import wizard (NEW)
+  ├── keepsakes/        # Keepsake generation (NEW)
+  └── settings/         # User settings (NEW)
+
+components/
+  ├── audio/            # Audio-related components
+  ├── profiles/         # Profile components
+  ├── library/          # Library components (NEW)
+  ├── import/           # Import components (NEW)
+  ├── keepsakes/        # Keepsake components (NEW)
+  ├── accessibility/    # Accessibility components (NEW)
+  └── ui/               # Reusable UI components
+
+lib/
+  ├── auth/             # Auth utilities
+  ├── hooks/            # Custom React hooks
+  ├── jobs/             # Background job handlers
+  ├── ai/               # AI integrations
+  └── utils/            # Helper functions
+```
+
+### Environment Variables Needed
+
+Add to `.env`:
+
+```bash
+# Existing
+DATABASE_URL=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GOOGLE_AI_API_KEY=
+
+# New for Import & Keepsakes
+OPENAI_API_KEY=                    # For DALL-E image generation
+GOOGLE_CLOUD_PROJECT=              # For Speech-to-Text
+GOOGLE_CLOUD_STORAGE_BUCKET=       # For file storage
+
+# Optional
+SENTRY_DSN=                        # Error logging
+STRIPE_SECRET_KEY=                 # If adding payments
+```
+
+---
+
+## 🎯 Quick Start for LLMs
+
+To pick up any task:
+
+1. **Read the task description carefully**
+2. **Check acceptance criteria**
+3. **Review related files mentioned**
+4. **Look for similar patterns in codebase**
+5. **Implement with tests**
+6. **Verify against acceptance criteria**
+7. **Commit with clear message**
+
+Example commit message:
+```
+Implement audio playback controls in library
+
+- Create AudioPlayer component with play/pause
+- Add seekable progress bar
+- Include playback speed controls
+- Save playback position to localStorage
+- Integrate player in Library page
+- Handle loading and error states
+
+Closes Task 1.4
+```
+
+---
+
+## 📊 Progress Tracking
+
+Update this section as tasks complete:
+
+- [ ] Library Backend Integration: 0/7 tasks
+- [ ] Import Wizard: 0/7 tasks
+- [ ] Accessibility Features: 0/8 tasks
+- [ ] Consent Dialog UI: 0/3 tasks
+- [ ] Keepsake Generators: 0/6 tasks
+- [ ] Infrastructure: 0/3 tasks
+- [ ] Testing: 0/3 tasks
+
+**Total Progress: 0/37 remaining tasks**
+
+---
+
+**Last Updated:** 2025-11-12
+**Maintained By:** Development Team
+**Questions:** See documentation in `/docs` folder
