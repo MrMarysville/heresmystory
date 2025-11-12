@@ -7,24 +7,84 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { RecordingControls } from '@/components/audio/RecordingControls';
 import { ConversationInterface } from '@/components/conversational/ConversationInterface';
 import { useRecording } from '@/lib/hooks/useRecording';
 import { useSession } from '@/lib/hooks/useSession';
+import { getCurrentUser, signOut } from '@/lib/auth/client-utils';
 import { ConversationMessage } from '@/types';
 
 export default function DashboardPage() {
-  // For MVP, use a default profile ID
-  // In production, this would come from user selection or authentication
-  const [profileId] = useState<string>('default-profile');
+  const router = useRouter();
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const recording = useRecording();
   const session = useSession();
 
+  // Check authentication and load user profile
+  useEffect(() => {
+    async function loadUser() {
+      const { user, error } = await getCurrentUser();
+
+      if (error || !user) {
+        router.push('/login');
+        return;
+      }
+
+      setUserEmail(user.email || null);
+
+      // Fetch user's profiles
+      try {
+        const response = await fetch('/api/profiles');
+        if (response.ok) {
+          const profiles = await response.json();
+          if (profiles.length > 0) {
+            setProfileId(profiles[0].id); // Use first profile
+          } else {
+            // Create default profile
+            const createResponse = await fetch('/api/profiles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                displayName: user.email?.split('@')[0] || 'Me',
+                relation: 'Self',
+              }),
+            });
+            if (createResponse.ok) {
+              const newProfile = await createResponse.json();
+              setProfileId(newProfile.id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load profiles:', error);
+      }
+
+      setIsLoadingAuth(false);
+    }
+
+    loadUser();
+  }, [router]);
+
+  // Handle logout
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+    router.refresh();
+  };
+
   // Handle start recording
   const handleStartRecording = async () => {
+    if (!profileId) {
+      alert('Please wait for your profile to load');
+      return;
+    }
+
     try {
       // Start session
       await session.startSession(profileId);
@@ -120,12 +180,17 @@ export default function DashboardPage() {
               >
                 Profiles
               </Link>
-              <Link
-                href="/settings"
+              {userEmail && (
+                <span className="text-sm text-gray-600">
+                  {userEmail}
+                </span>
+              )}
+              <button
+                onClick={handleLogout}
                 className="text-gray-600 hover:text-gray-900 transition-colors"
               >
-                Settings
-              </Link>
+                Logout
+              </button>
             </nav>
           </div>
         </div>
@@ -133,16 +198,24 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {/* Page Title */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            Record Your Story
-          </h2>
-          <p className="text-gray-600">
-            Share your memories and experiences. The AI assistant will guide you
-            through the conversation.
-          </p>
-        </div>
+        {/* Loading State */}
+        {isLoadingAuth ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        ) : (
+          <>
+            {/* Page Title */}
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                Record Your Story
+              </h2>
+              <p className="text-gray-600">
+                Share your memories and experiences. The AI assistant will guide you
+                through the conversation.
+              </p>
+            </div>
 
         {/* Error Display */}
         {(recording.error || session.error) && (
@@ -282,11 +355,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Session Info */}
-        {isInitialized && session.sessionId && (
-          <div className="mt-6 text-center text-sm text-gray-500">
-            Session ID: {session.sessionId.slice(0, 8)}...
-          </div>
+            {/* Session Info */}
+            {isInitialized && session.sessionId && (
+              <div className="mt-6 text-center text-sm text-gray-500">
+                Session ID: {session.sessionId.slice(0, 8)}...
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

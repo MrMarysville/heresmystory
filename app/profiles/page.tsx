@@ -6,7 +6,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getCurrentUser, signOut } from '@/lib/auth/client-utils';
 
 interface Profile {
   id: string;
@@ -39,7 +41,27 @@ const mockProfiles: Profile[] = [
 ];
 
 export default function ProfilesPage() {
+  const router = useRouter();
   const [profiles] = useState<Profile[]>(mockProfiles);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { user, error } = await getCurrentUser();
+      if (error || !user) {
+        router.push('/login');
+        return;
+      }
+      setUserEmail(user.email || null);
+    }
+    checkAuth();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -66,6 +88,17 @@ export default function ProfilesPage() {
               >
                 Library
               </Link>
+              {userEmail && (
+                <span className="text-sm text-gray-600">
+                  {userEmail}
+                </span>
+              )}
+              <button
+                onClick={handleLogout}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Logout
+              </button>
             </nav>
           </div>
         </div>

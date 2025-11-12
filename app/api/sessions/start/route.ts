@@ -4,14 +4,31 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/database/client';
+import { prisma } from '@/lib/prisma';
+import { verifyAuth } from '@/lib/auth/helpers';
 import { createGeminiLiveClient } from '@/lib/ai/gemini-live';
 import { ApiResponse } from '@/types';
 
 export async function POST(request: NextRequest) {
+  // Verify authentication
+  const { authorized, user } = await verifyAuth(request);
+
+  if (!authorized || !user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      } as ApiResponse,
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
-    const { profileId, userId } = body;
+    const { profileId } = body;
 
     if (!profileId) {
       return NextResponse.json(
@@ -26,9 +43,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify profile exists and belongs to user
-    const profile = await prisma.profile.findUnique({
-      where: { id: profileId },
+    // Verify profile exists and belongs to authenticated user
+    const profile = await prisma.profile.findFirst({
+      where: {
+        id: profileId,
+        userId: user.id,
+      },
       include: { user: true },
     });
 

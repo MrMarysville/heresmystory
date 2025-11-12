@@ -6,7 +6,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getCurrentUser, signOut } from '@/lib/auth/client-utils';
 
 interface Story {
   id: string;
@@ -56,9 +58,29 @@ const mockStories: Story[] = [
 ];
 
 export default function LibraryPage() {
+  const router = useRouter();
   const [stories] = useState<Story[]>(mockStories);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'ready' | 'processing'>('all');
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { user, error } = await getCurrentUser();
+      if (error || !user) {
+        router.push('/login');
+        return;
+      }
+      setUserEmail(user.email || null);
+    }
+    checkAuth();
+  }, [router]);
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -112,6 +134,17 @@ export default function LibraryPage() {
               >
                 Profiles
               </Link>
+              {userEmail && (
+                <span className="text-sm text-gray-600">
+                  {userEmail}
+                </span>
+              )}
+              <button
+                onClick={handleLogout}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Logout
+              </button>
             </nav>
           </div>
         </div>
