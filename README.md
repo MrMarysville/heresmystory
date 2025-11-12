@@ -349,3 +349,21 @@ Built with:
 ---
 
 **For Seniors, By Design**: Simple, safe, warm, and respectful. Every feature prioritizes ease of use and privacy.
+
+## 🌿 Git Branch Structure
+
+This project uses a standard `main` branch workflow:
+
+**Development:** Work on the `main` branch locally  
+**Remote:** Automatically synced to the feature branch for Claude Code compatibility
+
+```bash
+# Standard workflow - just use main!
+git checkout main
+git add .
+git commit -m "Your changes"
+git push  # Auto-handled
+```
+
+All your code is on `main` - work here as you normally would with any GitHub project.
+
