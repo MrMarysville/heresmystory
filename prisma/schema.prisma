@@ -1,0 +1,231 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum UserRole {
+  USER
+  FAMILY_ADMIN
+  ADMIN
+}
+
+enum ConsentType {
+  AUDIO_RECORDING
+  VOICE_TRAINING
+  FAMILY_SHARING
+  THIRD_PARTY_PROVIDERS
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum VoiceModelStatus {
+  PENDING
+  TRAINING
+  VERIFYING
+  READY
+  FAILED
+}
+
+enum VoiceProvider {
+  GOOGLE_CUSTOM_VOICE
+  ELEVEN_LABS
+  OTHER
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+enum JobKind {
+  CLEANUP_AUDIO
+  ASR_DIARIZE
+  NLP_ENRICH
+  TRAIN_VOICE_MODEL
+  SAFETY_REVIEW
+  RENDER_ALBUM
+  RENDER_VIDEO
+  GENERATE_IMAGES
+}
+
+enum AssetType {
+  RAW_AUDIO
+  CLEAN_AUDIO
+  IMAGE
+  PDF
+  VIDEO
+  THUMBNAIL
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profiles  Profile[]
+
+  @@map("users")
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String
+  displayName String
+  relation    String?  // e.g., "Grandma", "Dad", "Aunt Mary"
+  avatarUrl   String?
+  colorTheme  String   @default("#6366f1") // Hex color for UI theming
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consents     Consent[]
+  sessions     Session[]
+  voiceModels  VoiceModel[]
+
+  @@index([userId])
+  @@map("profiles")
+}
+
+model Consent {
+  id            String        @id @default(cuid())
+  profileId     String
+  type          ConsentType
+  textVersion   String        // Version identifier for consent text
+  consentText   String        @db.Text
+  signedAt      DateTime      @default(now())
+  revokedAt     DateTime?
+  expiresAt     DateTime?
+  status        ConsentStatus @default(ACTIVE)
+  ipAddress     String?
+  userAgent     String?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, type, status])
+  @@map("consents")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  profileId      String
+  startedAt      DateTime @default(now())
+  endedAt        DateTime?
+  rawAudioUrl    String?
+  cleanAudioUrl  String?
+  duration       Int?     // Duration in seconds
+  transcriptJson String?  @db.Json // Includes diarization, timestamps
+  summary        String?  @db.Text
+  sentiment      String?
+  tags           String[] @default([])
+  entities       String?  @db.Json // People, places, dates extracted
+  timeline       String?  @db.Json // Chronological data points
+  title          String?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assets  Asset[]
+
+  @@index([profileId, startedAt])
+  @@map("sessions")
+}
+
+model VoiceModel {
+  id            String            @id @default(cuid())
+  profileId     String
+  provider      VoiceProvider     @default(GOOGLE_CUSTOM_VOICE)
+  status        VoiceModelStatus  @default(PENDING)
+  samplesCount  Int               @default(0)
+  durationMins  Float             @default(0)
+  modelRef      String?           // Provider-specific model ID
+  quality       String?           @db.Json // Quality metrics
+  metadata      String?           @db.Json // Additional provider data
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, status])
+  @@map("voice_models")
+}
+
+model Asset {
+  id         String    @id @default(cuid())
+  sessionId  String?
+  type       AssetType
+  url        String
+  filename   String?
+  size       Int?      // Size in bytes
+  mimeType   String?
+  duration   Float?    // For audio/video in seconds
+  metadata   String?   @db.Json
+  createdAt  DateTime  @default(now())
+
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  shares  Share[]
+
+  @@index([sessionId, type])
+  @@map("assets")
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  kind      JobKind
+  payload   String    @db.Json
+  status    JobStatus @default(PENDING)
+  attempts  Int       @default(0)
+  maxRetries Int      @default(3)
+  lastError String?   @db.Text
+  result    String?   @db.Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([status, kind, createdAt])
+  @@map("jobs")
+}
+
+model Share {
+  id            String    @id @default(cuid())
+  assetId       String
+  token         String    @unique @default(cuid())
+  expiresAt     DateTime?
+  allowedEmails String[]  @default([])
+  accessCount   Int       @default(0)
+  maxAccess     Int?      // Optional limit
+  createdAt     DateTime  @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([token, expiresAt])
+  @@map("shares")
+}
+
+// For vector similarity search (semantic memory)
+model Memory {
+  id         String   @id @default(cuid())
+  profileId  String
+  sessionId  String
+  content    String   @db.Text
+  embedding  Unsupported("vector(1536)")?
+  metadata   String?  @db.Json
+  createdAt  DateTime @default(now())
+
+  @@index([profileId])
+  @@map("memories")
+}
