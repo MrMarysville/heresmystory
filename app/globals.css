@@ -24,3 +24,194 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ============================================
+   ACCESSIBILITY FEATURES
+   ============================================ */
+
+/* Text Size Controls */
+:root.text-normal {
+  font-size: 16px;
+}
+
+:root.text-large {
+  font-size: 18px;
+}
+
+:root.text-x-large {
+  font-size: 20px;
+}
+
+/* High Contrast Mode */
+:root.high-contrast {
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+:root.high-contrast body {
+  background: #000000;
+  color: #ffffff;
+}
+
+:root.high-contrast a {
+  color: #00ffff;
+  text-decoration: underline;
+}
+
+:root.high-contrast button {
+  border: 2px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+:root.high-contrast button:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+:root.high-contrast input,
+:root.high-contrast textarea,
+:root.high-contrast select {
+  border: 2px solid #ffffff;
+  background: #000000;
+  color: #ffffff;
+}
+
+:root.high-contrast .bg-white {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+:root.high-contrast .text-gray-600,
+:root.high-contrast .text-gray-700,
+:root.high-contrast .text-gray-900 {
+  color: #ffffff !important;
+}
+
+:root.high-contrast .border-gray-200,
+:root.high-contrast .border-gray-300 {
+  border-color: #ffffff !important;
+}
+
+/* Slow Mode - Slower Animations */
+:root.slow-mode * {
+  animation-duration: 1.5s !important;
+  transition-duration: 0.6s !important;
+}
+
+/* Reduced Motion */
+:root.reduced-motion *,
+:root.reduced-motion *::before,
+:root.reduced-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Keyboard Navigation - Enhanced Focus Indicators */
+:root.keyboard-nav *:focus {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+:root.keyboard-nav button:focus,
+:root.keyboard-nav a:focus,
+:root.keyboard-nav input:focus,
+:root.keyboard-nav textarea:focus,
+:root.keyboard-nav select:focus {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.2);
+}
+
+/* Focus Indicators Always Visible */
+:root.focus-indicators *:focus-visible {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Screen Reader Optimizations */
+:root.screen-reader .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Button Labels - Show text on icon-only buttons */
+:root.button-labels [aria-label]::after {
+  content: attr(aria-label);
+  margin-left: 0.5rem;
+  font-size: 0.875rem;
+}
+
+:root.button-labels button[aria-label] {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Skip to Content Link */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #4f46e5;
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* Ensure sufficient color contrast */
+:root.high-contrast .bg-indigo-600 {
+  background: #0000ff !important;
+}
+
+:root.high-contrast .bg-indigo-700 {
+  background: #0000cc !important;
+}
+
+:root.high-contrast .text-indigo-600,
+:root.high-contrast .text-indigo-700 {
+  color: #00ffff !important;
+}
+
+/* Large clickable areas */
+:root.text-large button,
+:root.text-large a,
+:root.text-x-large button,
+:root.text-x-large a {
+  min-height: 44px;
+  padding: 12px 16px;
+}
+
+/* Better line spacing for readability */
+:root.text-large,
+:root.text-x-large {
+  line-height: 1.6;
+}
+
+:root.text-large p,
+:root.text-x-large p {
+  margin-bottom: 1.2em;
+}
+
+/* High contrast for form elements */
+:root.high-contrast input:focus,
+:root.high-contrast textarea:focus,
+:root.high-contrast select:focus {
+  outline: 3px solid #00ffff;
+  outline-offset: 2px;
+}

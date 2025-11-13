@@ -4,7 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/database/client';
+import { prisma } from '@/lib/prisma';
+import { verifyAuth } from '@/lib/auth/helpers';
 import { ConsentType } from '@prisma/client';
 import { ApiResponse } from '@/types';
 
@@ -49,6 +50,22 @@ Last Updated: ${new Date().toISOString().split('T')[0]}
 `;
 
 export async function POST(request: NextRequest) {
+  // Verify authentication
+  const { authorized, user } = await verifyAuth(request);
+
+  if (!authorized || !user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      } as ApiResponse,
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { profileId, agreed, ipAddress, userAgent } = body;
@@ -66,9 +83,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify profile exists
-    const profile = await prisma.profile.findUnique({
-      where: { id: profileId },
+    // Verify profile exists and belongs to authenticated user
+    const profile = await prisma.profile.findFirst({
+      where: {
+        id: profileId,
+        userId: user.id,
+      },
     });
 
     if (!profile) {
@@ -143,6 +163,22 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  // Verify authentication
+  const { authorized, user } = await verifyAuth(request);
+
+  if (!authorized || !user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      } as ApiResponse,
+      { status: 401 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const profileId = searchParams.get('profileId');
@@ -157,6 +193,27 @@ export async function GET(request: NextRequest) {
           },
         } as ApiResponse,
         { status: 400 }
+      );
+    }
+
+    // Verify profile belongs to authenticated user
+    const profile = await prisma.profile.findFirst({
+      where: {
+        id: profileId,
+        userId: user.id,
+      },
+    });
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'PROFILE_NOT_FOUND',
+            message: 'Profile not found',
+          },
+        } as ApiResponse,
+        { status: 404 }
       );
     }
 
@@ -205,6 +262,22 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  // Verify authentication
+  const { authorized, user } = await verifyAuth(request);
+
+  if (!authorized || !user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Authentication required',
+        },
+      } as ApiResponse,
+      { status: 401 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const profileId = searchParams.get('profileId');
@@ -219,6 +292,27 @@ export async function DELETE(request: NextRequest) {
           },
         } as ApiResponse,
         { status: 400 }
+      );
+    }
+
+    // Verify profile belongs to authenticated user
+    const profile = await prisma.profile.findFirst({
+      where: {
+        id: profileId,
+        userId: user.id,
+      },
+    });
+
+    if (!profile) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'PROFILE_NOT_FOUND',
+            message: 'Profile not found',
+          },
+        } as ApiResponse,
+        { status: 404 }
       );
     }
 
