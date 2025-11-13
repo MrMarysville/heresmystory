@@ -1,7 +1,7 @@
 # Here's My Story - TODO List
 
 **Last Updated:** 2025-11-12
-**Overall Progress:** ~70% Complete (Library + Accessibility Features Completed)
+**Overall Progress:** ~75% Complete (Library + Accessibility + Consent UI Completed)
 
 This document provides a comprehensive breakdown of all remaining MVP features that need to be implemented. Each task includes both frontend and backend requirements for production-ready completion.
 
@@ -17,11 +17,11 @@ This document provides a comprehensive breakdown of all remaining MVP features t
 - [x] Conversational AI - Gemini Live integration
 - [x] API Route Protection - Auth verification on all endpoints
 - [x] **Library Backend Integration** - Audio playback, transcript viewer, search, pagination
-- [x] **Accessibility Features** - Complete system with settings, styles, keyboard nav, widget ⭐ NEW
+- [x] **Accessibility Features** - Complete system with settings, styles, keyboard nav, widget
+- [x] **Consent Dialog UI** - Multi-step consent flow, status management, grant/revoke ⭐ NEW
 
 ### ⚠️ IN PROGRESS (Partial)
 - [ ] Keepsake Generators - PDF & Video (placeholder only)
-- [ ] UI Components - Consent Dialogs (backend ready), Avatar Upload
 
 ### ❌ NOT STARTED
 - [ ] Import Wizard - Complete feature
@@ -752,51 +752,60 @@ Complete accessibility system implemented with:
 
 ---
 
-## 🎯 Priority 4: Consent Dialog UI
+## 🎯 Priority 4: Consent Dialog UI ✅ COMPLETED
 
-**Status:** Backend Complete, Frontend Missing
-**Estimated Effort:** 3-4 hours
-**Dependencies:** Dialog component (✅)
+**Status:** ✅ **COMPLETED** (2025-11-12)
+**Actual Effort:** 3 hours
+**Dependencies:** Dialog component (✅), Voice Consent API (✅)
+
+### Implementation Summary
+
+Complete consent management system implemented with:
+- ✅ Multi-step consent dialog (`components/consent/ConsentDialog.tsx`)
+- ✅ Consent status display (`components/consent/ConsentStatus.tsx`)
+- ✅ Profile detail page with consent management (`app/profiles/[id]/page.tsx`)
+- ✅ Profile consent API endpoint (`app/api/profiles/[id]/consent/route.ts`)
+- ✅ Integration with profiles list page
+- ✅ Full grant/revoke workflow
+
+### Features Implemented
+
+**ConsentDialog Component:**
+- 4-step wizard: Introduction → Terms → Review → Confirm
+- Step indicator showing progress
+- Detailed explanation of voice training benefits
+- Full terms and conditions display
+- Review summary with key points
+- Final confirmation with checkbox
+- Error handling and loading states
+- ARIA-compliant navigation
+
+**ConsentStatus Component:**
+- Shows consent status (granted/not granted/revoked)
+- Displays consent details (date, version, type)
+- "Grant Consent" button for new consent
+- "Revoke Consent" with double-confirmation
+- Error handling for API operations
+- Visual status indicators (amber for missing, green for active)
+
+**Profile Detail Page:**
+- Complete profile view with stats
+- Voice training section with consent management
+- Navigation to record stories and view library
+- Detailed profile information
+- Breadcrumb navigation
+- Loading and error states
+
+**Backend Integration:**
+- Consent API: GET for status, POST for grant, DELETE for revoke
+- Profile consent endpoint for detailed records
+- Proper authorization checks
+- Automatic voice model marking for deletion on revoke
 
 ### Frontend Tasks
 
-#### Task 4.1: Consent Dialog Component
-**File:** `components/consent/ConsentDialog.tsx` (NEW)
-
-**Requirements:**
-- [ ] Create multi-step consent dialog using Dialog component
-- [ ] Steps:
-  1. Introduction - Explain voice training
-  2. Terms - Display consent text from API
-  3. Review - Summarize what user is agreeing to
-  4. Sign - Checkbox "I agree" + Submit
-- [ ] Fetch consent text from API:
-  ```typescript
-  const { data } = await fetch(`/api/voice/consent?profileId=${profileId}`)
-  const consentText = data.consentText
-  ```
-- [ ] Accept props:
-  ```typescript
-  interface ConsentDialogProps {
-    open: boolean
-    onOpenChange: (open: boolean) => void
-    profileId: string
-    onConsent: () => void
-  }
-  ```
-- [ ] Submit consent:
-  ```typescript
-  const handleAgree = async () => {
-    await fetch('/api/voice/consent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        profileId,
-        agreed: true,
-      }),
-    })
-    onConsent()
-  }
+#### Task 4.1: Consent Dialog Component ✅ COMPLETED
+**File:** `components/consent/ConsentDialog.tsx` (CREATED)
   ```
 - [ ] Show error if submission fails
 - [ ] Prevent closing without completing

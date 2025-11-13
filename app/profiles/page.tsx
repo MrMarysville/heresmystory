@@ -288,16 +288,24 @@ export default function ProfilesPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-2 gap-2 mb-3">
                         <Link
                           href={`/dashboard?profile=${profile.id}`}
-                          className="flex-1 px-4 py-2 bg-blue-600 text-white text-center rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          className="px-4 py-2 bg-blue-600 text-white text-center rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                         >
                           Record Story
                         </Link>
+                        <Link
+                          href={`/profiles/${profile.id}`}
+                          className="px-4 py-2 bg-indigo-600 text-white text-center rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                        >
+                          View Details
+                        </Link>
+                      </div>
+                      <div className="flex gap-2">
                         <button
                           onClick={() => setEditingProfile(profile)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
                         >
                           Edit
                         </button>
